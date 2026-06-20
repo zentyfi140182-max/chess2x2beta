@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2v2 Шахматы — Мультиплеер</title>
+<script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+.screen { display: none; width: 100%; max-width: 600px; flex-direction: column; align-items: center; }
+.screen.active { display: flex; }
+
+h1 { color: #f0d9b5; margin-bottom: 10px; font-size: 2.5em; text-align: center; }
+.subtitle { color: #888; margin-bottom: 40px; text-align: center; }
+.menu-box {
+  background: rgba(58,58,58,0.9);
+  border-radius: 15px;
+  padding: 30px;
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.setting-row { margin-bottom: 25px; }
+.setting-label {
+  font-size: 1.1em;
+  color: #f0d9b5;
+  margin-bottom: 12px;
+  font-weight: bold;
+}
+.options { display: flex; gap: 8px; flex-wrap: wrap; }
+.opt {
+  flex: 1;
+  min-width: 80px;
+  padding: 12px;
+  background: rgba(255,255,255,0.1);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  font-size: 1em;
+}
+.opt:hover { background: rgba(255,255,255,0.2); }
+.opt.selected { background: #769656; border-color: #f0d9b5; }
+.btn-row { display: flex; gap: 10px; margin-top: 20px; }
+.btn {
+  flex: 1;
+  padding: 14px;
+  font-size: 1.1em;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+.btn-primary { background: linear-gradient(145deg, #769656, #5a7342); color: #fff; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(118,150,86,0.4); }
+.btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
+.btn-secondary:hover { background: rgba(255,255,255,0.2); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Экран ожидания */
+.waiting-box {
+  text-align: center;
+  padding: 40px;
+}
+.room-link {
+  background: rgba(0,0,0,0.3);
+  padding: 15px;
+  border-radius: 8px;
+  margin: 20px 0;
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 0.9em;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.copy-btn {
+  margin-top: 10px;
+  padding: 10px 20px;
+  background: #769656;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.copy-btn:hover { background: #5a7342; }
+.spinner {
+  border: 4px solid rgba(255,255,255,0.1);
+  border-left-color: #769656;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 20px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, 70px);
+  grid-template-rows: repeat(8, 70px);
+  border: 4px solid #5c4033;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.square {
+  width: 70px;
+  height: 70px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+}
+.light { background: #eeeed2; }
+.dark { background: #769656; }
+.selected { background: #f6f669 !important; }
+.last-move { background: rgba(155, 199, 0, 0.41) !important; }
+.check { background: radial-gradient(circle, #ff4444, #cc0000) !important; }
+.legal::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 50%;
+  z-index: 1;
+}
+.capture::before {
+  content: '';
+  position: absolute;
+  width: 62px;
+  height: 62px;
+  border: 4px solid rgba(0,0,0,0.25);
+  border-radius: 50%;
+  z-index: 1;
+}
+.piece {
+  font-size: 54px;
+  z-index: 2;
+  line-height: 1;
+  pointer-events: none;
+}
+.piece.w {
+  color: #fff;
+  text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+}
+.piece.b {
+  color: #111;
+  text-shadow: -1px -1px 0 #888, 1px -1px 0 #888, -1px 1px 0 #888, 1px 1px 0 #888;
+}
+
+.timers {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 15px;
+  width: 100%;
+  justify-content: center;
+}
+.timer-box {
+  background: rgba(58,58,58,0.9);
+  padding: 12px 25px;
+  border-radius: 10px;
+  text-align: center;
+  min-width: 140px;
+  border: 2px solid transparent;
+  transition: all 0.3s;
+}
+.timer-box.active {
+  border-color: #ffd700;
+  box-shadow: 0 0 20px rgba(255,215,0,0.4);
+}
+.timer-label {
+  font-size: 0.85em;
+  color: #888;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.timer-value {
+  font-size: 2em;
+  font-weight: bold;
+  font-family: 'Courier New', monospace;
+  color: #fff;
+}
+.timer-value.low { color: #ff4444; animation: pulse 1s infinite; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.status {
+  margin-top: 15px;
+  padding: 12px 25px;
+  background: rgba(58,58,58,0.9);
+  border-radius: 8px;
+  font-size: 1.2em;
+  font-weight: bold;
+  border: 2px solid #769656;
+  min-width: 300px;
+  text-align: center;
+}
+.status.check { border-color: #ff4444; }
+.status.gameover { border-color: #ffd700; }
+.controls {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+}
+button.ctrl {
+  padding: 10px 20px;
+  font-size: 1em;
+  cursor: pointer;
+  background: #769656;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+}
+button.ctrl:hover { background: #5a7342; }
+button.ctrl.danger { background: #c0392b; }
+button.ctrl.danger:hover { background: #a03020; }
+
+.connection-status {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  padding: 8px 15px;
+  background: rgba(58,58,58,0.9);
+  border-radius: 6px;
+  font-size: 0.9em;
+  z-index: 100;
+}
+.connection-status.connected { border: 2px solid #769656; }
+.connection-status.disconnected { border: 2px solid #c0392b; }
+</style>
+</head>
+<body>
+
+<div id="menuScreen" class="screen active">
+  <h1>2v2 Шахматы</h1>
+  <p class="subtitle">Мультиплеер по ссылке</p>
+  <div class="menu-box">
+    <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="showScreen('settings')">
+      🎮 Создать комнату
+    </button>
+    <button class="btn btn-secondary" style="width:100%" disabled>
+      🌐 Онлайн (скоро)
+    </button>
+  </div>
+</div>
+
+<div id="settingsScreen" class="screen">
+  <h1>Настройки партии</h1>
+  <div class="menu-box">
+    <div class="setting-row">
+      <div class="setting-label">⏱️ Время на команду</div>
+      <div class="options" id="timerOpt">
+        <div class="opt" data-v="0">∞</div>
+        <div class="opt" data-v="1">1 мин</div>
+        <div class="opt" data-v="3">3 мин</div>
+        <div class="opt selected" data-v="5">5 мин</div>
+        <div class="opt" data-v="10">10 мин</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="showScreen('menu')">← Назад</button>
+      <button class="btn btn-primary" onclick="createRoom()">▶ Создать</button>
+    </div>
+  </div>
+</div>
+
+<div id="waitingScreen" class="screen">
+  <h1>Ожидание игрока</h1>
+  <div class="menu-box waiting-box">
+    <div class="spinner"></div>
+    <p style="margin-bottom:20px">Отправь ссылку другу:</p>
+    <div class="room-link" id="roomLink"></div>
+    <button class="copy-btn" onclick="copyLink()">📋 Скопировать ссылку</button>
+    <p style="margin-top:20px;color:#888;font-size:0.9em">Или открой эту ссылку во втором окне для теста</p>
+  </div>
+</div>
+
+<div id="gameScreen" class="screen">
+  <div class="timers">
+    <div class="timer-box" id="timerW">
+      <div class="timer-label">Белые</div>
+      <div class="timer-value" id="tW">5:00</div>
+    </div>
+    <div class="timer-box" id="timerB">
+      <div class="timer-label">Чёрные</div>
+      <div class="timer-value" id="tB">5:00</div>
+    </div>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="status" id="status">Ход белых</div>
+  <div class="controls">
+    <button class="ctrl" onclick="backToMenu()">← В меню</button>
+    <button class="ctrl danger" onclick="resetGame()">🔄 Заново</button>
+  </div>
+</div>
+
+<div class="connection-status" id="connStatus"></div>
+
+<script>
+var cfg = { timer: '5' };
+var peer = null;
+var conn = null;
+var isHost = false;
+var roomId = null;
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById(name + 'Screen').classList.add('active');
+}
+
+document.querySelectorAll('#timerOpt .opt').forEach(function(btn) {
+  btn.onclick = function() {
+    document.querySelectorAll('#timerOpt .opt').forEach(function(x) { x.classList.remove('selected'); });
+    btn.classList.add('selected');
+    cfg.timer = btn.getAttribute('data-v');
+  };
+});
+
+// ===== ЗВУКИ =====
+var audioCtx = null;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playSound(type) {
+  if (!audioCtx) return;
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  var now = audioCtx.currentTime;
+  if (type === 'move') {
+    osc.frequency.setValueAtTime(200, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.08);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    osc.start(now); osc.stop(now + 0.08);
+  } else if (type === 'capture') {
+    osc.frequency.setValueAtTime(300, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.start(now); osc.stop(now + 0.15);
+  } else if (type === 'check') {
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(500, now);
+    osc.frequency.setValueAtTime(400, now + 0.1);
+    osc.frequency.setValueAtTime(500, now + 0.2);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    osc.start(now); osc.stop(now + 0.3);
+  } else if (type === 'end') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(400, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc.start(now); osc.stop(now + 0.5);
+  }
+}
+document.addEventListener('click', initAudio, { once: true });
+
+// ===== ШАХМАТНАЯ ЛОГИКА =====
+var P = {
+  'K': '\u2654', 'Q': '\u2655', 'R': '\u2656', 'B': '\u2657', 'N': '\u2658', 'P': '\u2659',
+  'k': '\u265A', 'q': '\u265B', 'r': '\u265C', 'b': '\u265D', 'n': '\u265E', 'p': '\u265F'
+};
+var bd = [];
+var cr = { wK: true, wQ: true, bK: true, bQ: true };
+var ep = null;
+var turn = 'w';
+var halfmove = 0;
+var fullmove = 1;
+var sel = null;
+var lm = null;
+var over = false;
+var tmr = { w: 300, b: 300 };
+var tmrI = null;
+
+function isW(p) { return p && p === p.toUpperCase(); }
+function col(p) { return p ? (isW(p) ? 'w' : 'b') : null; }
+function cloneBd() { return bd.map(function(r) { return r.slice(); }); }
+function cloneEp() { return ep ? { r: ep.r, c: ep.c } : null; }
+function cloneCr() { return { wK: cr.wK, wQ: cr.wQ, bK: cr.bK, bQ: cr.bQ }; }
+
+function initBd() {
+  bd = [
+    ['r','n','b','q','k','b','n','r'],
+    ['p','p','p','p','p','p','p','p'],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    ['P','P','P','P','P','P','P','P'],
+    ['R','N','B','Q','K','B','N','R']
+  ];
+  cr = { wK: true, wQ: true, bK: true, bQ: true };
+  ep = null; turn = 'w'; halfmove = 0; fullmove = 1;
+  sel = null; lm = null; over = false;
+}
+
+function findK(c) {
+  var k = c === 'w' ? 'K' : 'k';
+  for (var r = 0; r < 8; r++)
+    for (var cc = 0; cc < 8; cc++)
+      if (bd[r][cc] === k) return { r: r, c: cc };
+  return null;
+}
+
+function attacked(row, cc, by) {
+  var pd = by === 'w' ? 1 : -1;
+  if (row + pd >= 0 && row + pd < 8) {
+    if (cc - 1 >= 0 && bd[row+pd][cc-1] && col(bd[row+pd][cc-1]) === by && bd[row+pd][cc-1].toLowerCase() === 'p') return true;
+    if (cc + 1 < 8 && bd[row+pd][cc+1] && col(bd[row+pd][cc+1]) === by && bd[row+pd][cc+1].toLowerCase() === 'p') return true;
+  }
+  var kts = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+  for (var i = 0; i < kts.length; i++) {
+    var r = row + kts[i][0], c = cc + kts[i][1];
+    if (r >= 0 && r < 8 && c >= 0 && c < 8 && bd[r][c] && col(bd[r][c]) === by && bd[r][c].toLowerCase() === 'n') return true;
+  }
+  for (var dr = -1; dr <= 1; dr++)
+    for (var dc = -1; dc <= 1; dc++)
+      if (dr || dc) {
+        var r = row + dr, c = cc + dc;
+        if (r >= 0 && r < 8 && c >= 0 && c < 8 && bd[r][c] && col(bd[r][c]) === by && bd[r][c].toLowerCase() === 'k') return true;
+      }
+  var dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+  for (var i = 0; i < dirs.length; i++) {
+    var dr = dirs[i][0], dc = dirs[i][1];
+    for (var s = 1; s < 8; s++) {
+      var r = row + dr*s, c = cc + dc*s;
+      if (r < 0 || r >= 8 || c < 0 || c >= 8) break;
+      var p = bd[r][c];
+      if (p) { if (col(p) === by && (p.toLowerCase() === 'r' || p.toLowerCase() === 'q')) return true; break; }
+    }
+  }
+  dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+  for (var i = 0; i < dirs.length; i++) {
+    var dr = dirs[i][0], dc = dirs[i][1];
+    for (var s = 1; s < 8; s++) {
+      var r = row + dr*s, c = cc + dc*s;
+      if (r < 0 || r >= 8 || c < 0 || c >= 8) break;
+      var p = bd[r][c];
+      if (p) { if (col(p) === by && (p.toLowerCase() === 'b' || p.toLowerCase() === 'q')) return true; break; }
+    }
+  }
+  return false;
+}
+
+function inCheck(c) {
+  var k = findK(c);
+  if (!k) return false;
+  return attacked(k.r, k.c, c === 'w' ? 'b' : 'w');
+}
+
+function pseudoM(row, cc, atkOnly) {
+  var pc = bd[row][cc]; if (!pc) return [];
+  var clr = col(pc), tp = pc.toLowerCase(), ms = [];
+  function add(r, c, ex) {
+    if (r < 0 || r > 7 || c < 0 || c > 7) return false;
+    var t = bd[r][c];
+    if (!t) { if (!atkOnly) ms.push({ r: r, c: c, e: ex || {} }); return true; }
+    if (col(t) !== clr) { ms.push({ r: r, c: c, e: ex || {} }); return false; }
+    return false;
+  }
+  function line(dirs) {
+    for (var i = 0; i < dirs.length; i++) {
+      var dr = dirs[i][0], dc = dirs[i][1];
+      for (var s = 1; s < 8; s++) if (!add(row + dr*s, cc + dc*s)) break;
+    }
+  }
+  if (tp === 'p') {
+    var d = clr === 'w' ? -1 : 1, st = clr === 'w' ? 6 : 1;
+    if (!atkOnly) {
+      if (row+d >= 0 && row+d < 8 && !bd[row+d][cc]) {
+        ms.push({ r: row+d, c: cc, e: {} });
+        if (row === st && row+2*d >= 0 && row+2*d < 8 && !bd[row+2*d][cc])
+          ms.push({ r: row+2*d, c: cc, e: {} });
+      }
+    }
+    for (var dc = -1; dc <= 1; dc += 2) {
+      var nr = row+d, nc = cc+dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        var t = bd[nr][nc];
+        if (t && col(t) !== clr) ms.push({ r: nr, c: nc, e: {} });
+        if (ep && ep.r === nr && ep.c === nc) ms.push({ r: nr, c: nc, e: { ep: true } });
+      }
+    }
+  }
+  if (tp === 'r' || tp === 'q') line([[0,1],[0,-1],[1,0],[-1,0]]);
+  if (tp === 'b' || tp === 'q') line([[1,1],[1,-1],[-1,1],[-1,-1]]);
+  if (tp === 'n') {
+    var kts = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+    for (var i = 0; i < kts.length; i++) add(row + kts[i][0], cc + kts[i][1]);
+  }
+  if (tp === 'k') {
+    for (var dr = -1; dr <= 1; dr++)
+      for (var dc = -1; dc <= 1; dc++)
+        if (dr || dc) add(row + dr, cc + dc);
+    if (!atkOnly && !inCheck(clr)) {
+      var opp = clr === 'w' ? 'b' : 'w';
+      if ((clr === 'w' && cr.wK) || (clr === 'b' && cr.bK)) {
+        if (!bd[row][5] && !bd[row][6] && bd[row][7] === (clr === 'w' ? 'R' : 'r'))
+          if (!attacked(row, 5, opp) && !attacked(row, 6, opp))
+            ms.push({ r: row, c: 6, e: { castle: 'K' } });
+      }
+      if ((clr === 'w' && cr.wQ) || (clr === 'b' && cr.bQ)) {
+        if (!bd[row][1] && !bd[row][2] && !bd[row][3] && bd[row][0] === (clr === 'w' ? 'R' : 'r'))
+          if (!attacked(row, 2, opp) && !attacked(row, 3, opp))
+            ms.push({ r: row, c: 2, e: { castle: 'Q' } });
+      }
+    }
+  }
+  return ms;
+}
+
+function legalM(row, cc) {
+  var pc = bd[row][cc]; if (!pc) return [];
+  var clr = col(pc), pseudo = pseudoM(row, cc), legal = [];
+  for (var i = 0; i < pseudo.length; i++) {
+    var m = pseudo[i];
+    var sb = cloneBd(), se = cloneEp(), sc = cloneCr();
+    bd[m.r][m.c] = pc; bd[row][cc] = null;
+    if (m.e.ep) bd[row][m.c] = null;
+    if (m.e.castle) {
+      if (m.e.castle === 'K') { bd[row][5] = bd[row][7]; bd[row][7] = null; }
+      else { bd[row][3] = bd[row][0]; bd[row][0] = null; }
+    }
+    if (!inCheck(clr)) legal.push(m);
+    bd = sb; ep = se; cr = sc;
+  }
+  return legal;
+}
+
+function allLegal(clr) {
+  var all = [];
+  for (var r = 0; r < 8; r++)
+    for (var c = 0; c < 8; c++) {
+      var p = bd[r][c];
+      if (p && col(p) === clr) {
+        var ms = legalM(r, c);
+        for (var i = 0; i < ms.length; i++)
+          all.push({ fr: r, fc: c, tr: ms[i].r, tc: ms[i].c, e: ms[i].e });
+      }
+    }
+  return all;
+}
+
+function doMove(fr, fc, tr, tc, info) {
+  var pc = bd[fr][fc], clr = col(pc), cap = bd[tr][tc];
+  bd[tr][tc] = pc; bd[fr][fc] = null;
+  if (info && info.ep) { var ec = bd[fr][tc]; bd[fr][tc] = null; }
+  if (info && info.castle) {
+    if (info.castle === 'K') { bd[fr][5] = bd[fr][7]; bd[fr][7] = null; }
+    else { bd[fr][3] = bd[fr][0]; bd[fr][0] = null; }
+  }
+  if (pc.toLowerCase() === 'p' && (tr === 0 || tr === 7))
+    bd[tr][tc] = clr === 'w' ? 'Q' : 'q';
+  if (pc === 'K') { cr.wK = false; cr.wQ = false; }
+  if (pc === 'k') { cr.bK = false; cr.bQ = false; }
+  if (pc === 'R' && fr === 7 && fc === 7) cr.wK = false;
+  if (pc === 'R' && fr === 7 && fc === 0) cr.wQ = false;
+  if (pc === 'r' && fr === 0 && fc === 7) cr.bK = false;
+  if (pc === 'r' && fr === 0 && fc === 0) cr.bQ = false;
+  if (pc.toLowerCase() === 'p' && Math.abs(tr - fr) === 2)
+    ep = { r: (fr + tr) / 2, c: fc };
+  else ep = null;
+  if (clr === 'b') fullmove++;
+  lm = { fr: fr, fc: fc, tr: tr, tc: tc };
+  turn = clr === 'w' ? 'b' : 'w';
+  if (cap || (info && info.ep)) playSound('capture');
+  else playSound('move');
+}
+
+// ===== МУЛЬТИПЛЕЕР =====
+function createRoom() {
+  isHost = true;
+  roomId = Math.random().toString(36).substr(2, 8).toUpperCase();
+  peer = new Peer(roomId);
+  
+  peer.on('open', function(id) {
+    console.log('Room created:', id);
+    var link = window.location.origin + window.location.pathname + '?room=' + id;
+    document.getElementById('roomLink').textContent = link;
+    showScreen('waiting');
+  });
+  
+  peer.on('connection', function(connection) {
+    conn = connection;
+    setupConnection();
+  });
+  
+  peer.on('error', function(err) {
+    console.error('Peer error:', err);
+    alert('Ошибка создания комнаты: ' + err.type);
+  });
+}
+
+function joinRoom(roomId) {
+  isHost = false;
+  peer = new Peer();
+  
+  peer.on('open', function() {
+    conn = peer.connect(roomId);
+    setupConnection();
+  });
+  
+  peer.on('error', function(err) {
+    console.error('Peer error:', err);
+    alert('Ошибка подключения: ' + err.type);
+  });
+}
+
+function setupConnection() {
+  conn.on('open', function() {
+    console.log('Connected!');
+    updateConnectionStatus(true);
+    if (isHost) {
+      // Хост отправляет настройки гостю
+      conn.send({ type: 'settings', timer: cfg.timer });
+    }
+    startGame();
+  });
+  
+  conn.on('data', function(data) {
+    if (data.type === 'move') {
+      // Применяем ход противника
+      doMove(data.fr, data.fc, data.tr, data.tc, data.e);
+      sel = null;
+      var oms = allLegal(turn);
+      if (oms.length === 0) {
+        over = true;
+        playSound('end');
+        if (inCheck(turn)) {
+          document.getElementById('status').textContent = 'МАТ! Победили ' + (turn === 'w' ? 'чёрные' : 'белые');
+          document.getElementById('status').className = 'status gameover';
+        } else {
+          document.getElementById('status').textContent = 'ПАТ! Ничья';
+          document.getElementById('status').className = 'status gameover';
+        }
+        clearInterval(tmrI);
+      }
+      render();
+    } else if (data.type === 'settings') {
+      cfg.timer = data.timer;
+    }
+  });
+  
+  conn.on('close', function() {
+    console.log('Connection closed');
+    updateConnectionStatus(false);
+    alert('Противник отключился');
+  });
+  
+  conn.on('error', function(err) {
+    console.error('Connection error:', err);
+    updateConnectionStatus(false);
+  });
+}
+
+function updateConnectionStatus(connected) {
+  var statusEl = document.getElementById('connStatus');
+  if (connected) {
+    statusEl.textContent = '🟢 Подключено';
+    statusEl.className = 'connection-status connected';
+  } else {
+    statusEl.textContent = ' Отключено';
+    statusEl.className = 'connection-status disconnected';
+  }
+}
+
+function sendMove(fr, fc, tr, tc, e) {
+  if (conn && conn.open) {
+    conn.send({ type: 'move', fr: fr, fc: fc, tr: tr, tc: tc, e: e });
+  }
+}
+
+function copyLink() {
+  var link = document.getElementById('roomLink').textContent;
+  navigator.clipboard.writeText(link).then(function() {
+    alert('Ссылка скопирована!');
+  }).catch(function() {
+    // Fallback для старых браузеров
+    var textarea = document.createElement('textarea');
+    textarea.value = link;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    alert('Ссылка скопирована!');
+  });
+}
+
+// ===== ТАЙМЕРЫ =====
+function startTimers() {
+  if (tmrI) clearInterval(tmrI);
+  var minutes = parseInt(cfg.timer);
+  if (minutes === 0) {
+    document.getElementById('tW').textContent = '∞';
+    document.getElementById('tB').textContent = '∞';
+    return;
+  }
+  tmr = { w: minutes * 60, b: minutes * 60 };
+  updateTimerDisplay();
+  tmrI = setInterval(function() {
+    if (over) { clearInterval(tmrI); return; }
+    if (turn === 'w') {
+      tmr.w--;
+      if (tmr.w <= 0) {
+        over = true;
+        clearInterval(tmrI);
+        playSound('end');
+        document.getElementById('status').textContent = '⏰ Время белых вышло! Чёрные победили!';
+        document.getElementById('status').className = 'status gameover';
+      }
+    } else {
+      tmr.b--;
+      if (tmr.b <= 0) {
+        over = true;
+        clearInterval(tmrI);
+        playSound('end');
+        document.getElementById('status').textContent = '⏰ Время чёрных вышло! Белые победили!';
+        document.getElementById('status').className = 'status gameover';
+      }
+    }
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  var minutes = parseInt(cfg.timer);
+  if (minutes === 0) return;
+  var wEl = document.getElementById('tW');
+  var bEl = document.getElementById('tB');
+  wEl.textContent = fmtTime(tmr.w);
+  bEl.textContent = fmtTime(tmr.b);
+  wEl.classList.toggle('low', tmr.w < 60);
+  bEl.classList.toggle('low', tmr.b < 60);
+  document.getElementById('timerW').classList.toggle('active', turn === 'w' && !over);
+  document.getElementById('timerB').classList.toggle('active', turn === 'b' && !over);
+}
+
+function fmtTime(seconds) {
+  var m = Math.floor(seconds / 60);
+  var s = seconds % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+// ===== ОТРИСОВКА =====
+function render() {
+  var bEl = document.getElementById('board');
+  bEl.innerHTML = '';
+  var wK = findK('w'), bK = findK('b');
+  var wCk = inCheck('w'), bCk = inCheck('b');
+  for (var r = 0; r < 8; r++) {
+    for (var c = 0; c < 8; c++) {
+      var sq = document.createElement('div');
+      sq.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      if ((wCk && wK && wK.r === r && wK.c === c) || (bCk && bK && bK.r === r && bK.c === c))
+        sq.classList.add('check');
+      if (lm && ((lm.fr === r && lm.fc === c) || (lm.tr === r && lm.tc === c)))
+        sq.classList.add('last-move');
+      var pc = bd[r][c];
+      if (pc) {
+        var sp = document.createElement('span');
+        sp.className = 'piece ' + (isW(pc) ? 'w' : 'b');
+        sp.textContent = P[pc];
+        sq.appendChild(sp);
+      }
+      if (sel && sel.r === r && sel.c === c) sq.classList.add('selected');
+      if (sel) {
+        var ms = legalM(sel.r, sel.c);
+        for (var mi = 0; mi < ms.length; mi++)
+          if (ms[mi].r === r && ms[mi].c === c) {
+            sq.classList.add(bd[r][c] ? 'capture' : 'legal');
+            break;
+          }
+      }
+      (function(rr, cc) {
+        sq.onclick = function() { onClick(rr, cc); };
+      })(r, c);
+      bEl.appendChild(sq);
+    }
+  }
+  updateStatus();
+  updateTimerDisplay();
+}
+
+function updateStatus() {
+  var statusEl = document.getElementById('status');
+  if (over) return;
+  statusEl.textContent = 'Ход ' + (turn === 'w' ? 'белых' : 'чёрных');
+  if (inCheck(turn)) {
+    statusEl.className = 'status check';
+    playSound('check');
+  } else {
+    statusEl.className = 'status';
+  }
+}
+
+function onClick(row, cc) {
+  if (over) return;
+  var pc = bd[row][cc];
+  if (sel) {
+    var ms = legalM(sel.r, sel.c), mv = null;
+    for (var i = 0; i < ms.length; i++)
+      if (ms[i].r === row && ms[i].c === cc) { mv = ms[i]; break; }
+    if (mv) {
+      doMove(sel.r, sel.c, row, cc, mv.e);
+      sendMove(sel.r, sel.c, row, cc, mv.e);
+      sel = null;
+      var oms = allLegal(turn);
+      if (oms.length === 0) {
+        over = true;
+        playSound('end');
+        if (inCheck(turn)) {
+          document.getElementById('status').textContent = 'МАТ! Победили ' + (turn === 'w' ? 'чёрные' : 'белые');
+          document.getElementById('status').className = 'status gameover';
+        } else {
+          document.getElementById('status').textContent = 'ПАТ! Ничья';
+          document.getElementById('status').className = 'status gameover';
+        }
+        clearInterval(tmrI);
+      }
+      render();
+    } else {
+      sel = (pc && col(pc) === turn) ? { r: row, c: cc } : null;
+      render();
+    }
+  } else {
+    if (pc && col(pc) === turn) { sel = { r: row, c: cc }; render(); }
+  }
+}
+
+function startGame() {
+  initBd();
+  showScreen('game');
+  render();
+  startTimers();
+}
+
+function resetGame() {
+  if (tmrI) clearInterval(tmrI);
+  initBd();
+  render();
+  startTimers();
+}
+
+function backToMenu() {
+  if (tmrI) clearInterval(tmrI);
+  if (conn) conn.close();
+  if (peer) peer.destroy();
+  showScreen('menu');
+}
+
+// ===== АВТОПОДКЛЮЧЕНИЕ ПО ССЫЛКЕ =====
+window.onload = function() {
+  var params = new URLSearchParams(window.location.search);
+  var room = params.get('room');
+  if (room) {
+    console.log('Joining room:', room);
+    joinRoom(room);
+  }
+};
+</script>
+</body>
+</html>
