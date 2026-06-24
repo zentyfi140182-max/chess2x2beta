@@ -2,9 +2,10 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2v2 Шахматы — Мультиплеер</title>
-<script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -16,60 +17,39 @@ body {
   align-items: center;
   min-height: 100vh;
   padding: 10px;
-  overflow-x: hidden;
 }
-.screen { display: none; width: 100%; max-width: 1400px; flex-direction: column; align-items: center; }
+.screen { display: none; width: 100%; max-width: 800px; flex-direction: column; align-items: center; }
 .screen.active { display: flex; }
 
 h1 { color: #f0d9b5; margin-bottom: 10px; font-size: 2em; text-align: center; }
-.subtitle { color: #888; margin-bottom: 30px; text-align: center; font-size: 0.9em; }
+.subtitle { color: #888; margin-bottom: 20px; text-align: center; }
 .menu-box {
   background: rgba(58,58,58,0.9);
   border-radius: 15px;
   padding: 25px;
   width: 100%;
-  max-width: 500px;
   border: 1px solid rgba(255,255,255,0.1);
 }
 .setting-row { margin-bottom: 20px; }
-.setting-label {
-  font-size: 1em;
-  color: #f0d9b5;
-  margin-bottom: 10px;
-  font-weight: bold;
-}
+.setting-label { font-size: 1em; color: #f0d9b5; margin-bottom: 10px; font-weight: bold; }
 .options { display: flex; gap: 6px; flex-wrap: wrap; }
 .opt {
-  flex: 1;
-  min-width: 70px;
-  padding: 10px;
-  background: rgba(255,255,255,0.1);
-  border: 2px solid transparent;
-  border-radius: 6px;
-  color: #fff;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.2s;
-  font-size: 0.9em;
+  flex: 1; min-width: 70px; padding: 10px;
+  background: rgba(255,255,255,0.1); border: 2px solid transparent;
+  border-radius: 6px; color: #fff; cursor: pointer; text-align: center;
+  transition: all 0.2s; font-size: 0.9em;
 }
 .opt:hover { background: rgba(255,255,255,0.2); }
 .opt.selected { background: #769656; border-color: #f0d9b5; }
 .btn-row { display: flex; gap: 8px; margin-top: 15px; }
 .btn {
-  flex: 1;
-  padding: 12px;
-  font-size: 1em;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.2s;
+  flex: 1; padding: 12px; font-size: 1em; border: none;
+  border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;
 }
 .btn-primary { background: linear-gradient(145deg, #769656, #5a7342); color: #fff; }
 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(118,150,86,0.4); }
 .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
 .btn-secondary:hover { background: rgba(255,255,255,0.2); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Экран ожидания */
 .waiting-box { text-align: center; padding: 30px 20px; }
@@ -108,65 +88,44 @@ h1 { color: #f0d9b5; margin-bottom: 10px; font-size: 2em; text-align: center; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Подключение по коду */
-.join-box { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
-.join-input {
-  width: 100%;
-  padding: 12px;
-  font-size: 1.5em;
-  text-align: center;
-  letter-spacing: 5px;
-  background: rgba(0,0,0,0.3);
-  border: 2px solid rgba(255,255,255,0.2);
-  border-radius: 6px;
-  color: #fff;
-  font-family: monospace;
-  text-transform: uppercase;
-  margin-bottom: 10px;
+/* Список комнат */
+.rooms-list {
+  margin-top: 20px;
+  max-height: 300px;
+  overflow-y: auto;
 }
-.join-input:focus { outline: none; border-color: #769656; }
-
-/* Игровой экран */
-.game-container {
-  display: flex;
-  gap: 15px;
-  width: 100%;
-  justify-content: center;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-.board-section {
-  flex: 1;
-  min-width: 300px;
-  max-width: 600px;
-}
-.info-section {
-  width: 280px;
-  background: rgba(58,58,58,0.9);
-  border-radius: 10px;
+.room-item {
+  background: rgba(255,255,255,0.1);
   padding: 15px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
 }
+.room-item:hover { background: rgba(255,255,255,0.2); border-color: #769656; }
+.room-item.full { opacity: 0.5; cursor: not-allowed; }
+.room-info { display: flex; justify-content: space-between; align-items: center; }
+.room-name { font-weight: bold; font-size: 1.1em; }
+.room-players { color: #888; font-size: 0.9em; }
+.room-mode { color: #f0d9b5; font-size: 0.85em; }
 
+/* Игра */
+.game-container { display: flex; gap: 15px; width: 100%; justify-content: center; flex-wrap: wrap; }
+.board-section { flex: 1; min-width: 300px; max-width: 600px; }
+.info-section {
+  width: 250px; background: rgba(58,58,58,0.9); border-radius: 10px;
+  padding: 15px; border: 1px solid rgba(255,255,255,0.1);
+}
 .board {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
-  aspect-ratio: 1;
-  width: 100%;
-  max-width: 560px;
-  border: 4px solid #5c4033;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: grid; grid-template-columns: repeat(8, 1fr);
+  aspect-ratio: 1; width: 100%; max-width: 560px;
+  border: 4px solid #5c4033; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   margin: 0 auto;
 }
 .square {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  position: relative;
-  user-select: none;
-  aspect-ratio: 1;
+  display: flex; justify-content: center; align-items: center;
+  cursor: pointer; position: relative; user-select: none; aspect-ratio: 1;
 }
 .light { background: #eeeed2; }
 .dark { background: #769656; }
@@ -174,205 +133,78 @@ h1 { color: #f0d9b5; margin-bottom: 10px; font-size: 2em; text-align: center; }
 .last-move { background: rgba(155, 199, 0, 0.41) !important; }
 .check { background: radial-gradient(circle, #ff4444, #cc0000) !important; }
 .legal::before {
-  content: '';
-  position: absolute;
-  width: 25%;
-  height: 25%;
-  background: rgba(0,0,0,0.25);
-  border-radius: 50%;
-  z-index: 1;
+  content: ''; position: absolute; width: 25%; height: 25%;
+  background: rgba(0,0,0,0.25); border-radius: 50%; z-index: 1;
 }
 .capture::before {
-  content: '';
-  position: absolute;
-  width: 85%;
-  height: 85%;
-  border: 4px solid rgba(0,0,0,0.25);
-  border-radius: 50%;
-  z-index: 1;
+  content: ''; position: absolute; width: 85%; height: 85%;
+  border: 4px solid rgba(0,0,0,0.25); border-radius: 50%; z-index: 1;
 }
 .piece {
-  font-size: clamp(30px, 8vw, 54px);
-  z-index: 2;
-  line-height: 1;
-  pointer-events: none;
+  font-size: clamp(30px, 8vw, 54px); z-index: 2; line-height: 1; pointer-events: none;
 }
-.piece.w {
-  color: #fff;
-  text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
-}
-.piece.b {
-  color: #111;
-  text-shadow: -1px -1px 0 #888, 1px -1px 0 #888, -1px 1px 0 #888, 1px 1px 0 #888;
-}
+.piece.w { color: #fff; text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000; }
+.piece.b { color: #111; text-shadow: -1px -1px 0 #888, 1px -1px 0 #888, -1px 1px 0 #888, 1px 1px 0 #888; }
 
-/* Таймеры */
 .timers {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 10px;
-  width: 100%;
-  max-width: 560px;
-  justify-content: center;
+  display: flex; gap: 20px; margin-bottom: 10px;
+  width: 100%; max-width: 560px; justify-content: center;
 }
 .timer-box {
-  background: rgba(58,58,58,0.9);
-  padding: 10px 20px;
-  border-radius: 8px;
-  text-align: center;
-  flex: 1;
-  border: 2px solid transparent;
-  transition: all 0.3s;
+  background: rgba(58,58,58,0.9); padding: 10px 20px; border-radius: 8px;
+  text-align: center; flex: 1; border: 2px solid transparent; transition: all 0.3s;
 }
-.timer-box.active {
-  border-color: #ffd700;
-  box-shadow: 0 0 15px rgba(255,215,0,0.4);
-}
-.timer-label {
-  font-size: 0.75em;
-  color: #888;
-  margin-bottom: 3px;
-  text-transform: uppercase;
-}
-.timer-value {
-  font-size: 1.5em;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-}
+.timer-box.active { border-color: #ffd700; box-shadow: 0 0 15px rgba(255,215,0,0.4); }
+.timer-label { font-size: 0.75em; color: #888; margin-bottom: 3px; text-transform: uppercase; }
+.timer-value { font-size: 1.5em; font-weight: bold; font-family: 'Courier New', monospace; }
 .timer-value.low { color: #ff4444; animation: pulse 1s infinite; }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 .status {
-  margin-top: 10px;
-  padding: 10px 20px;
-  background: rgba(58,58,58,0.9);
-  border-radius: 8px;
-  font-size: 1.1em;
-  font-weight: bold;
-  border: 2px solid #769656;
-  text-align: center;
-  width: 100%;
-  max-width: 560px;
+  margin-top: 10px; padding: 10px 20px; background: rgba(58,58,58,0.9);
+  border-radius: 8px; font-size: 1.1em; font-weight: bold;
+  border: 2px solid #769656; text-align: center; width: 100%; max-width: 560px;
 }
 .status.check { border-color: #ff4444; }
-.status.gameover { border-color: #ffd700; }
-
+.status.waiting { border-color: #ffa500; background: rgba(255,165,0,0.2); }
 .controls {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-  width: 100%;
-  max-width: 560px;
+  margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;
+  justify-content: center; width: 100%; max-width: 560px;
 }
 button.ctrl {
-  padding: 8px 16px;
-  font-size: 0.9em;
-  cursor: pointer;
-  background: #769656;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-weight: bold;
+  padding: 8px 16px; font-size: 0.9em; cursor: pointer;
+  background: #769656; color: #fff; border: none; border-radius: 6px; font-weight: bold;
 }
 button.ctrl:hover { background: #5a7342; }
 button.ctrl.danger { background: #c0392b; }
-button.ctrl.danger:hover { background: #a03020; }
-button.ctrl:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Инфо-панель */
 .info-panel h3 {
-  color: #f0d9b5;
-  margin-bottom: 10px;
-  font-size: 1em;
-  border-bottom: 2px solid #769656;
-  padding-bottom: 5px;
+  color: #f0d9b5; margin-bottom: 10px; font-size: 1em;
+  border-bottom: 2px solid #769656; padding-bottom: 5px;
 }
-.info-panel .captured {
-  font-size: 20px;
-  min-height: 25px;
-  margin: 5px 0 10px 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-}
+.info-panel .captured { font-size: 20px; min-height: 25px; margin: 5px 0 10px 0; display: flex; flex-wrap: wrap; gap: 2px; }
 .info-panel .history {
-  max-height: 200px;
-  overflow-y: auto;
-  font-family: monospace;
-  font-size: 11px;
-  background: rgba(0,0,0,0.3);
-  padding: 6px;
-  border-radius: 5px;
+  max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 11px;
+  background: rgba(0,0,0,0.3); padding: 6px; border-radius: 5px;
 }
-.info-panel .history div {
-  padding: 2px 4px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
+.info-panel .history div { padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 
-.connection-status {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  padding: 6px 12px;
-  background: rgba(58,58,58,0.9);
-  border-radius: 6px;
-  font-size: 0.8em;
-  z-index: 100;
-}
-.connection-status.connected { border: 2px solid #769656; }
-.connection-status.disconnected { border: 2px solid #c0392b; }
-
-/* Адаптивность */
-@media (max-width: 768px) {
-  .game-container { flex-direction: column; align-items: center; }
-  .info-section { width: 100%; max-width: 560px; }
-  .board { max-width: 100%; }
-  h1 { font-size: 1.5em; }
-}
-
-/* Полноэкранный режим */
-.fullscreen-btn {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  padding: 6px 12px;
-  background: rgba(58,58,58,0.9);
-  border: 2px solid #769656;
-  border-radius: 6px;
-  color: #fff;
-  cursor: pointer;
-  font-size: 0.8em;
-  z-index: 100;
-}
-.fullscreen-btn:hover { background: #769656; }
-
-/* Модальное окно */
 .modal-bg {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.85);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 1000;
 }
 .modal-bg.active { display: flex; }
 .modal {
-  background: #2a2a3e;
-  border-radius: 15px;
-  padding: 30px;
-  text-align: center;
-  max-width: 400px;
-  border: 2px solid #769656;
+  background: #2a2a3e; border-radius: 15px; padding: 30px;
+  text-align: center; max-width: 400px; border: 2px solid #769656;
 }
 .modal h2 { font-size: 2em; margin-bottom: 15px; }
 .modal p { font-size: 1.1em; color: #aaa; margin-bottom: 20px; }
-.modal .btn { margin: 5px; }
+
+@media (max-width: 768px) {
+  .game-container { flex-direction: column; align-items: center; }
+  .info-section { width: 100%; max-width: 560px; }
+}
 </style>
 </head>
 <body>
@@ -380,15 +212,14 @@ button.ctrl:disabled { opacity: 0.5; cursor: not-allowed; }
 <!-- Главное меню -->
 <div id="menuScreen" class="screen active">
   <h1>2v2 Шахматы</h1>
-  <p class="subtitle">Молчаливые шахматы 2 на 2</p>
+  <p class="subtitle">Мультиплеер через Firebase</p>
   <div class="menu-box">
     <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="showScreen('settings')">
       🎮 Создать комнату
     </button>
-    <div class="join-box">
-      <div class="setting-label">Или подключиться по коду:</div>
-      <input type="text" class="join-input" id="joinCode" placeholder="КОД" maxlength="6">
-      <button class="btn btn-secondary" style="width:100%" onclick="joinByCode()">Подключиться</button>
+    <div class="setting-label" style="margin-top:20px">Или выбери комнату:</div>
+    <div class="rooms-list" id="roomsList">
+      <p style="color:#888;text-align:center;padding:20px">Загрузка комнат...</p>
     </div>
   </div>
 </div>
@@ -421,23 +252,21 @@ button.ctrl:disabled { opacity: 0.5; cursor: not-allowed; }
   </div>
 </div>
 
-<!-- Ожидание -->
+<!-- Ожидание игрока -->
 <div id="waitingScreen" class="screen">
-  <h1>Ожидание игроков</h1>
+  <h1>Ожидание противника</h1>
   <div class="menu-box waiting-box">
     <div class="spinner"></div>
     <p style="margin-bottom:15px">Код комнаты:</p>
-    <div class="room-code" id="roomCode"></div>
+    <div class="room-code" id="roomCodeDisplay"></div>
     <button class="copy-btn" onclick="copyCode()">📋 Скопировать код</button>
-    <p style="margin-top:15px;color:#888;font-size:0.85em" id="waitingText">Ожидание второго игрока...</p>
+    <p style="margin-top:15px;color:#888;font-size:0.9em" id="waitingStatus">Ожидание подключения...</p>
+    <button class="btn btn-secondary" style="margin-top:20px;width:100%" onclick="cancelWaiting()">Отмена</button>
   </div>
 </div>
 
 <!-- Игра -->
 <div id="gameScreen" class="screen">
-  <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶ Полный экран</button>
-  <div class="connection-status" id="connStatus"></div>
-  
   <div class="game-container">
     <div class="board-section">
       <div class="timers">
@@ -451,13 +280,12 @@ button.ctrl:disabled { opacity: 0.5; cursor: not-allowed; }
         </div>
       </div>
       <div class="board" id="board"></div>
-      <div class="status" id="status">Ход белых</div>
+      <div class="status" id="status">Ожидание противника...</div>
       <div class="controls">
         <button class="ctrl" onclick="offerDraw()">🤝 Ничья</button>
         <button class="ctrl danger" onclick="resign()">🏳️ Сдаться</button>
       </div>
     </div>
-    
     <div class="info-section info-panel">
       <h3>Взятые фигуры</h3>
       <div style="font-size:0.8em;color:#888;margin-bottom:3px">Белые потеряли:</div>
@@ -480,21 +308,32 @@ button.ctrl:disabled { opacity: 0.5; cursor: not-allowed; }
 </div>
 
 <script>
+// ===== FIREBASE КОНФИГ =====
+var firebaseConfig = {
+  apiKey: "ТВОЙ_API_KEY",
+  authDomain: "ТВОЙ_ПРОЕКТ.firebaseapp.com",
+  databaseURL: "https://ТВОЙ_ПРОЕКТ-default-rtdb.firebaseio.com",
+  projectId: "ТВОЙ_ПРОЕКТ",
+  storageBucket: "ТВОЙ_ПРОЕКТ.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+};
+
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+
 // ===== НАСТРОЙКИ =====
 var cfg = { timer: '5', mode: '1v1' };
-var peer = null;
-var conn = null;
+var roomId = null;
+var playerColor = null;
 var isHost = false;
-var roomCode = null;
-var playerColor = null; // 'w' или 'b'
-var players = []; // список игроков в комнате
+var gameStarted = false;
 
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
   document.getElementById(name + 'Screen').classList.add('active');
 }
 
-// Инициализация кнопок настроек
 ['modeOpt', 'timerOpt'].forEach(function(id) {
   document.querySelectorAll('#' + id + ' .opt').forEach(function(btn) {
     btn.onclick = function() {
@@ -505,47 +344,142 @@ function showScreen(name) {
   });
 });
 
-// ===== ЗВУКИ =====
-var audioCtx = null;
-function initAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// ===== СПИСОК КОМНАТ =====
+function loadRooms() {
+  var roomsRef = db.ref('rooms');
+  roomsRef.on('value', function(snapshot) {
+    var rooms = snapshot.val() || {};
+    var roomsList = document.getElementById('roomsList');
+    roomsList.innerHTML = '';
+    
+    var roomKeys = Object.keys(rooms);
+    if (roomKeys.length === 0) {
+      roomsList.innerHTML = '<p style="color:#888;text-align:center;padding:20px">Нет активных комнат</p>';
+      return;
+    }
+    
+    roomKeys.forEach(function(key) {
+      var room = rooms[key];
+      if (room.state === 'playing') return; // Не показываем начатые игры
+      
+      var maxPlayers = room.mode === '2v2' ? 4 : 2;
+      var playerCount = room.players || 0;
+      var isFull = playerCount >= maxPlayers;
+      
+      var roomDiv = document.createElement('div');
+      roomDiv.className = 'room-item' + (isFull ? ' full' : '');
+      roomDiv.innerHTML = `
+        <div class="room-info">
+          <div>
+            <div class="room-name">Комната ${key.substr(-6)}</div>
+            <div class="room-players">${playerCount}/${maxPlayers} игроков</div>
+          </div>
+          <div class="room-mode">${room.mode} • ${room.timer} мин</div>
+        </div>
+      `;
+      
+      if (!isFull) {
+        roomDiv.onclick = function() { joinRoom(key); };
+      }
+      
+      roomsList.appendChild(roomDiv);
+    });
+  });
 }
-function playSound(type) {
-  if (!audioCtx) return;
-  var osc = audioCtx.createOscillator();
-  var gain = audioCtx.createGain();
-  osc.connect(gain); gain.connect(audioCtx.destination);
-  var now = audioCtx.currentTime;
-  if (type === 'move') {
-    osc.frequency.setValueAtTime(200, now);
-    osc.frequency.exponentialRampToValueAtTime(100, now + 0.08);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-    osc.start(now); osc.stop(now + 0.08);
-  } else if (type === 'capture') {
-    osc.frequency.setValueAtTime(300, now);
-    osc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
-    gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-    osc.start(now); osc.stop(now + 0.15);
-  } else if (type === 'check') {
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(500, now);
-    osc.frequency.setValueAtTime(400, now + 0.1);
-    osc.frequency.setValueAtTime(500, now + 0.2);
-    gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-    osc.start(now); osc.stop(now + 0.3);
-  } else if (type === 'end') {
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(400, now);
-    osc.frequency.exponentialRampToValueAtTime(100, now + 0.5);
-    gain.gain.setValueAtTime(0.4, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc.start(now); osc.stop(now + 0.5);
+
+// ===== СОЗДАНИЕ КОМНАТЫ =====
+function createRoom() {
+  isHost = true;
+  gameStarted = false;
+  roomId = db.ref('rooms').push().key;
+  playerColor = 'w';
+  
+  var roomData = {
+    mode: cfg.mode,
+    timer: cfg.timer,
+    players: 1,
+    maxPlayers: cfg.mode === '2v2' ? 4 : 2,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    state: 'waiting'
+  };
+  
+  db.ref('rooms/' + roomId).set(roomData);
+  db.ref('rooms/' + roomId + '/players/host').set({ color: 'w', joined: firebase.database.ServerValue.TIMESTAMP });
+  
+  // Показываем экран ожидания
+  document.getElementById('roomCodeDisplay').textContent = roomId.substr(-6).toUpperCase();
+  showScreen('waiting');
+  
+  // Слушаем подключения
+  db.ref('rooms/' + roomId + '/players').on('value', function(snapshot) {
+    var players = snapshot.val() || {};
+    var playerCount = Object.keys(players).length;
+    var maxPlayers = cfg.mode === '2v2' ? 4 : 2;
+    
+    document.getElementById('waitingStatus').textContent = 
+      `Подключено: ${playerCount} из ${maxPlayers}`;
+    
+    if (playerCount >= maxPlayers && !gameStarted) {
+      gameStarted = true;
+      db.ref('rooms/' + roomId + '/state').set({
+        turn: 'w',
+        board: null,
+        started: true
+      });
+      startGame();
+    }
+  });
+}
+
+function cancelWaiting() {
+  if (roomId) {
+    db.ref('rooms/' + roomId).remove();
   }
+  showScreen('menu');
 }
-document.addEventListener('click', initAudio, { once: true });
+
+// ===== ПОДКЛЮЧЕНИЕ К КОМНАТЕ =====
+function joinRoom(id) {
+  isHost = false;
+  roomId = id;
+  playerColor = 'b';
+  gameStarted = false;
+  
+  db.ref('rooms/' + roomId).once('value', function(snapshot) {
+    var room = snapshot.val();
+    if (!room) {
+      alert('Комната не найдена');
+      return;
+    }
+    
+    var maxPlayers = room.mode === '2v2' ? 4 : 2;
+    var playerCount = room.players || 0;
+    
+    if (playerCount >= maxPlayers) {
+      alert('Комната заполнена');
+      return;
+    }
+    
+    var playerId = 'player_' + Date.now();
+    db.ref('rooms/' + roomId + '/players/' + playerId).set({ 
+      color: 'b', 
+      joined: firebase.database.ServerValue.TIMESTAMP 
+    });
+    db.ref('rooms/' + roomId + '/players').transaction(function(players) {
+      if (!players) return { count: 1 };
+      players.count = (players.count || 0) + 1;
+      return players;
+    });
+    
+    // Слушаем начало игры
+    db.ref('rooms/' + roomId + '/state/started').on('value', function(snapshot) {
+      if (snapshot.val() === true && !gameStarted) {
+        gameStarted = true;
+        startGame();
+      }
+    });
+  });
+}
 
 // ===== ШАХМАТНАЯ ЛОГИКА =====
 var P = {
@@ -556,8 +490,6 @@ var bd = [];
 var cr = { wK: true, wQ: true, bK: true, bQ: true };
 var ep = null;
 var turn = 'w';
-var halfmove = 0;
-var fullmove = 1;
 var sel = null;
 var lm = null;
 var over = false;
@@ -585,7 +517,7 @@ function initBd() {
     ['R','N','B','Q','K','B','N','R']
   ];
   cr = { wK: true, wQ: true, bK: true, bQ: true };
-  ep = null; turn = 'w'; halfmove = 0; fullmove = 1;
+  ep = null; turn = 'w';
   sel = null; lm = null; over = false;
   moveHistory = []; capW = []; capB = [];
 }
@@ -737,7 +669,7 @@ function allLegal(clr) {
   return all;
 }
 
-function doMove(fr, fc, tr, tc, info, skipSound) {
+function doMove(fr, fc, tr, tc, info, skipSync) {
   var pc = bd[fr][fc], clr = col(pc), cap = bd[tr][tc];
   bd[tr][tc] = pc; bd[fr][fc] = null;
   if (info && info.ep) { var ec = bd[fr][tc]; bd[fr][tc] = null; }
@@ -756,21 +688,25 @@ function doMove(fr, fc, tr, tc, info, skipSound) {
   if (pc.toLowerCase() === 'p' && Math.abs(tr - fr) === 2)
     ep = { r: (fr + tr) / 2, c: fc };
   else ep = null;
-  if (clr === 'b') fullmove++;
   lm = { fr: fr, fc: fc, tr: tr, tc: tc };
   turn = clr === 'w' ? 'b' : 'w';
   
-  // Запись в историю
   var notation = getNotation(pc, fr, fc, tr, tc, info, cap);
   moveHistory.push(notation);
-  if (cap) {
-    if (clr === 'w') capW.push(cap); else capB.push(cap);
+  if (cap) { if (clr === 'w') capW.push(cap); else capB.push(cap); }
+  
+  if (!skipSync && roomId) {
+    db.ref('rooms/' + roomId + '/state').update({
+      turn: turn,
+      lm: lm,
+      moveHistory: moveHistory,
+      capW: capW,
+      capB: capB,
+      lastMove: { fr: fr, fc: fc, tr: tr, tc: tc }
+    });
   }
   
-  if (!skipSound) {
-    if (cap || (info && info.ep)) playSound('capture');
-    else playSound('move');
-  }
+  render();
 }
 
 function getNotation(pc, fr, fc, tr, tc, info, cap) {
@@ -785,260 +721,33 @@ function getNotation(pc, fr, fc, tr, tc, info, cap) {
   return sym + from + cx + f[tc] + rk[tr] + suf;
 }
 
-// ===== МУЛЬТИПЛЕЕР =====
-function createRoom() {
-  isHost = true;
-  roomCode = Math.random().toString(36).substr(2, 6).toUpperCase();
-  peer = new Peer('chess-' + roomCode);
-  
-  peer.on('open', function(id) {
-    console.log('Room created:', roomCode);
-    document.getElementById('roomCode').textContent = roomCode;
-    var maxPlayers = cfg.mode === '2v2' ? 4 : 2;
-    document.getElementById('waitingText').textContent = 
-      'Ожидание ' + (maxPlayers - 1) + ' игрока(ов)...';
-    showScreen('waiting');
-  });
-  
-  peer.on('connection', function(connection) {
-    if (cfg.mode === '1v1' && players.length >= 1) {
-      connection.close();
-      return;
-    }
-    if (cfg.mode === '2v2' && players.length >= 3) {
-      connection.close();
-      return;
-    }
-    
-    conn = connection;
-    players.push(connection);
-    
-    connection.on('open', function() {
-      console.log('Player connected');
-      connection.send({ type: 'settings', timer: cfg.timer, mode: cfg.mode });
-      
-      if ((cfg.mode === '1v1' && players.length >= 1) ||
-          (cfg.mode === '2v2' && players.length >= 3)) {
-        // Все подключились, начинаем игру
-        startMultiplayerGame();
-      } else {
-        document.getElementById('waitingText').textContent = 
-          'Подключено: ' + players.length + ' из ' + (cfg.mode === '1v1' ? 1 : 3);
-      }
-    });
-    
-    setupConnectionHandlers(connection);
-  });
-  
-  peer.on('error', function(err) {
-    console.error('Peer error:', err);
-    alert('Ошибка создания комнаты: ' + err.type);
-  });
-}
-
-function joinByCode() {
-  var code = document.getElementById('joinCode').value.trim().toUpperCase();
-  if (code.length !== 6) {
-    alert('Введите 6-значный код комнаты');
-    return;
-  }
-  
-  isHost = false;
-  peer = new Peer();
-  
-  peer.on('open', function() {
-    conn = peer.connect('chess-' + code);
-    
-    conn.on('open', function() {
-      console.log('Connected to room');
-      updateConnectionStatus(true);
-    });
-    
-    conn.on('data', function(data) {
-      if (data.type === 'settings') {
-        cfg.timer = data.timer;
-        cfg.mode = data.mode;
-        startMultiplayerGame();
-      }
-    });
-    
-    conn.on('close', function() {
-      updateConnectionStatus(false);
-      alert('Противник отключился');
-    });
-    
-    setupConnectionHandlers(conn);
-  });
-  
-  peer.on('error', function(err) {
-    console.error('Peer error:', err);
-    alert('Ошибка подключения: ' + err.type);
-  });
-}
-
-function setupConnectionHandlers(connection) {
-  connection.on('data', function(data) {
-    if (data.type === 'move') {
-      // ВАЛИДАЦИЯ ХОДА
-      var legalMoves = allLegal(turn);
-      var isValid = false;
-      for (var i = 0; i < legalMoves.length; i++) {
-        var m = legalMoves[i];
-        if (m.fr === data.fr && m.fc === data.fc && m.tr === data.tr && m.tc === data.tc) {
-          isValid = true;
-          break;
-        }
-      }
-      
-      if (!isValid) {
-        console.error('Invalid move received:', data);
-        return; // Отклоняем нелегальный ход
-      }
-      
-      doMove(data.fr, data.fc, data.tr, data.tc, data.e, false);
-      sel = null;
-      
-      var oms = allLegal(turn);
-      if (oms.length === 0) {
-        over = true;
-        playSound('end');
-        if (inCheck(turn)) {
-          showModal('МАТ!', 'Победили ' + (turn === 'w' ? 'чёрные' : 'белые'));
-        } else {
-          showModal('ПАТ!', 'Ничья');
-        }
-        clearInterval(tmrI);
-      }
-      render();
-    } else if (data.type === 'resign') {
-      over = true;
-      showModal('Противник сдался', 'Вы победили!');
-      clearInterval(tmrI);
-    } else if (data.type === 'draw_offer') {
-      if (confirm('Противник предлагает ничью. Принять?')) {
-        over = true;
-        showModal('Ничья', 'По соглашению');
-        clearInterval(tmrI);
-        if (conn && conn.open) conn.send({ type: 'draw_accept' });
-      } else {
-        if (conn && conn.open) conn.send({ type: 'draw_decline' });
-      }
-    } else if (data.type === 'draw_accept') {
-      over = true;
-      showModal('Ничья', 'По соглашению');
-      clearInterval(tmrI);
-    } else if (data.type === 'draw_decline') {
-      alert('Противник отклонил ничью');
-    }
-  });
-  
-  connection.on('close', function() {
-    updateConnectionStatus(false);
-  });
-}
-
-function sendMove(fr, fc, tr, tc, e) {
-  if (conn && conn.open) {
-    conn.send({ type: 'move', fr: fr, fc: fc, tr: tr, tc: tc, e: e });
-  }
-}
-
-function startMultiplayerGame() {
-  // Определяем цвет игрока
-  if (isHost) {
-    playerColor = 'w'; // Хост играет белыми
-  } else {
-    playerColor = 'b'; // Гость играет чёрными
-  }
-  
+function startGame() {
   initBd();
   showScreen('game');
   render();
   startTimers();
-  updateConnectionStatus(true);
-}
-
-function updateConnectionStatus(connected) {
-  var statusEl = document.getElementById('connStatus');
-  if (connected) {
-    statusEl.textContent = ' Подключено';
-    statusEl.className = 'connection-status connected';
-  } else {
-    statusEl.textContent = '🔴 Отключено';
-    statusEl.className = 'connection-status disconnected';
+  
+  // Слушаем изменения состояния
+  if (roomId) {
+    db.ref('rooms/' + roomId + '/state').on('value', function(snapshot) {
+      var state = snapshot.val();
+      if (state && state.turn) {
+        turn = state.turn;
+        if (state.lm) lm = state.lm;
+        if (state.moveHistory) moveHistory = state.moveHistory;
+        if (state.capW) capW = state.capW;
+        if (state.capB) capB = state.capB;
+        render();
+      }
+    });
   }
 }
 
-function copyCode() {
-  var code = document.getElementById('roomCode').textContent;
-  navigator.clipboard.writeText(code).then(function() {
-    alert('Код скопирован: ' + code);
-  }).catch(function() {
-    alert('Код комнаты: ' + code);
-  });
-}
-
-// ===== ТАЙМЕРЫ =====
-function startTimers() {
-  if (tmrI) clearInterval(tmrI);
-  var minutes = parseInt(cfg.timer);
-  if (minutes === 0) {
-    document.getElementById('tW').textContent = '∞';
-    document.getElementById('tB').textContent = '∞';
-    return;
-  }
-  tmr = { w: minutes * 60, b: minutes * 60 };
-  updateTimerDisplay();
-  tmrI = setInterval(function() {
-    if (over) { clearInterval(tmrI); return; }
-    if (turn === 'w') {
-      tmr.w--;
-      if (tmr.w <= 0) {
-        over = true;
-        clearInterval(tmrI);
-        playSound('end');
-        showModal('Время вышло!', 'Чёрные победили');
-      }
-    } else {
-      tmr.b--;
-      if (tmr.b <= 0) {
-        over = true;
-        clearInterval(tmrI);
-        playSound('end');
-        showModal('Время вышло!', 'Белые победили');
-      }
-    }
-    updateTimerDisplay();
-  }, 1000);
-}
-
-function updateTimerDisplay() {
-  var minutes = parseInt(cfg.timer);
-  if (minutes === 0) return;
-  var wEl = document.getElementById('tW');
-  var bEl = document.getElementById('tB');
-  wEl.textContent = fmtTime(tmr.w);
-  bEl.textContent = fmtTime(tmr.b);
-  wEl.classList.toggle('low', tmr.w < 60);
-  bEl.classList.toggle('low', tmr.b < 60);
-  document.getElementById('timerW').classList.toggle('active', turn === 'w' && !over);
-  document.getElementById('timerB').classList.toggle('active', turn === 'b' && !over);
-}
-
-function fmtTime(seconds) {
-  var m = Math.floor(seconds / 60);
-  var s = seconds % 60;
-  return m + ':' + (s < 10 ? '0' : '') + s;
-}
-
-// ===== ОТРИСОВКА =====
 function render() {
   var bEl = document.getElementById('board');
   bEl.innerHTML = '';
   var wK = findK('w'), bK = findK('b');
   var wCk = inCheck('w'), bCk = inCheck('b');
-  
-  // Переворот доски для чёрных
   var rows = playerColor === 'b' ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
   var cols = playerColor === 'b' ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
   
@@ -1083,14 +792,40 @@ function updateStatus() {
   if (over) return;
   
   var isMyTurn = (playerColor === 'w' && turn === 'w') || (playerColor === 'b' && turn === 'b');
-  statusEl.textContent = isMyTurn ? 'Ваш ход!' : 'Ход противника...';
   
-  if (inCheck(turn)) {
-    statusEl.className = 'status check';
-    playSound('check');
+  if (!gameStarted) {
+    statusEl.textContent = 'Ожидание противника...';
+    statusEl.className = 'status waiting';
+  } else if (isMyTurn) {
+    statusEl.textContent = 'Ваш ход!';
+    statusEl.className = inCheck(turn) ? 'status check' : 'status';
   } else {
+    statusEl.textContent = 'Ход противника...';
     statusEl.className = 'status';
   }
+}
+
+function updateTimerDisplay() {
+  var minutes = parseInt(cfg.timer);
+  if (minutes === 0) {
+    document.getElementById('tW').textContent = '∞';
+    document.getElementById('tB').textContent = '∞';
+    return;
+  }
+  var wEl = document.getElementById('tW');
+  var bEl = document.getElementById('tB');
+  wEl.textContent = fmtTime(tmr.w);
+  bEl.textContent = fmtTime(tmr.b);
+  wEl.classList.toggle('low', tmr.w < 60);
+  bEl.classList.toggle('low', tmr.b < 60);
+  document.getElementById('timerW').classList.toggle('active', turn === 'w' && !over);
+  document.getElementById('timerB').classList.toggle('active', turn === 'b' && !over);
+}
+
+function fmtTime(seconds) {
+  var m = Math.floor(seconds / 60);
+  var s = seconds % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
 function updateInfoPanel() {
@@ -1103,9 +838,7 @@ function updateInfoPanel() {
 }
 
 function onClick(row, cc) {
-  if (over) return;
-  
-  // Ограничение: игрок управляет только своим цветом
+  if (over || !gameStarted) return;
   var isMyTurn = (playerColor === 'w' && turn === 'w') || (playerColor === 'b' && turn === 'b');
   if (!isMyTurn) return;
   
@@ -1116,20 +849,14 @@ function onClick(row, cc) {
       if (ms[i].r === row && ms[i].c === cc) { mv = ms[i]; break; }
     if (mv) {
       doMove(sel.r, sel.c, row, cc, mv.e, false);
-      sendMove(sel.r, sel.c, row, cc, mv.e);
       sel = null;
       var oms = allLegal(turn);
       if (oms.length === 0) {
         over = true;
-        playSound('end');
-        if (inCheck(turn)) {
-          showModal('МАТ!', 'Победили ' + (turn === 'w' ? 'чёрные' : 'белые'));
-        } else {
-          showModal('ПАТ!', 'Ничья');
-        }
+        if (inCheck(turn)) showModal('МАТ!', 'Победили ' + (turn === 'w' ? 'чёрные' : 'белые'));
+        else showModal('ПАТ!', 'Ничья');
         clearInterval(tmrI);
       }
-      render();
     } else {
       sel = (pc && col(pc) === playerColor) ? { r: row, c: cc } : null;
       render();
@@ -1139,12 +866,37 @@ function onClick(row, cc) {
   }
 }
 
-// ===== ДЕЙСТВИЯ ИГРОКА =====
+function startTimers() {
+  if (tmrI) clearInterval(tmrI);
+  var minutes = parseInt(cfg.timer);
+  if (minutes === 0) return;
+  tmr = { w: minutes * 60, b: minutes * 60 };
+  updateTimerDisplay();
+  tmrI = setInterval(function() {
+    if (over) { clearInterval(tmrI); return; }
+    if (turn === 'w') {
+      tmr.w--;
+      if (tmr.w <= 0) {
+        over = true;
+        clearInterval(tmrI);
+        showModal('Время вышло!', 'Чёрные победили');
+      }
+    } else {
+      tmr.b--;
+      if (tmr.b <= 0) {
+        over = true;
+        clearInterval(tmrI);
+        showModal('Время вышло!', 'Белые победили');
+      }
+    }
+    updateTimerDisplay();
+  }, 1000);
+}
+
 function resign() {
   if (over) return;
-  if (confirm('Вы уверены, что хотите сдаться?')) {
+  if (confirm('Вы уверены?')) {
     over = true;
-    if (conn && conn.open) conn.send({ type: 'resign' });
     showModal('Вы сдались', 'Противник победил');
     clearInterval(tmrI);
   }
@@ -1152,9 +904,10 @@ function resign() {
 
 function offerDraw() {
   if (over) return;
-  if (confirm('Предложить ничью противнику?')) {
-    if (conn && conn.open) conn.send({ type: 'draw_offer' });
-    alert('Предложение ничьей отправлено');
+  if (confirm('Предложить ничью?')) {
+    showModal('Ничья', 'По соглашению');
+    over = true;
+    clearInterval(tmrI);
   }
 }
 
@@ -1166,32 +919,21 @@ function showModal(title, text) {
 
 function closeModal() {
   document.getElementById('modal').classList.remove('active');
-}
-
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(function(err) {
-      console.error('Fullscreen error:', err);
-    });
-  } else {
-    document.exitFullscreen();
-  }
-}
-
-function backToMenu() {
-  if (tmrI) clearInterval(tmrI);
-  if (conn) conn.close();
-  if (peer) peer.destroy();
   showScreen('menu');
 }
 
-// ===== АВТОПОДКЛЮЧЕНИЕ =====
+function copyCode() {
+  var code = document.getElementById('roomCodeDisplay').textContent;
+  navigator.clipboard.writeText(code).then(function() {
+    alert('Код скопирован: ' + code);
+  }).catch(function() {
+    alert('Код: ' + code);
+  });
+}
+
+// Загрузка
 window.onload = function() {
-  var params = new URLSearchParams(window.location.search);
-  var code = params.get('code');
-  if (code) {
-    document.getElementById('joinCode').value = code.toUpperCase();
-  }
+  loadRooms();
 };
 </script>
 </body>
